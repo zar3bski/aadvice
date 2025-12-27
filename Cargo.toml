@@ -1,0 +1,9 @@
+[package]
+name = "aadvise"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dbus = "0.9.10"
+log = {version="0.4.29", features= ["std"]}
+
