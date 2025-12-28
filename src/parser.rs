@@ -2,14 +2,15 @@ use std::{
     fs::File,
     io::{BufRead, BufReader},
     sync::mpsc::Sender,
-    thread::spawn,
+    thread::{sleep, spawn},
+    time::Duration,
 };
 
 use inotify::{Inotify, WatchMask};
 use log::{debug, info, trace, warn};
 use regex::Regex;
 
-use crate::message::NotificationMessage;
+use crate::{TIME_GRANULARITY, message::NotificationMessage};
 
 const LOG_FILE: &str = "/var/log/audit/audit.log";
 
@@ -49,7 +50,7 @@ impl Parser {
                 Some(message)
             }
             None => {
-                debug!("Line did not match DENIED regex: {}", log_line);
+                debug!("Line did not match DENIED regex");
                 None
             }
         }
@@ -78,10 +79,12 @@ impl Parser {
                     let line = iter.next().unwrap();
                     match line {
                         Ok(line) => match Self::filter(&line) {
-                            Some(message) => self
-                                .out_queue
-                                .send(message)
-                                .expect("Could not send message to D-Bus proxy"),
+                            Some(message) => {
+                                debug!("Parser: sent message to D-Bus proxy");
+                                self.out_queue
+                                    .send(message)
+                                    .expect("Could not send message to D-Bus proxy")
+                            }
                             None => {
                                 trace!("Line filtered out: {}", line)
                             }
@@ -91,6 +94,8 @@ impl Parser {
                         }
                     }
                 }
+
+                sleep(TIME_GRANULARITY);
             }
         });
     }

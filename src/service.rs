@@ -1,9 +1,15 @@
-use std::{error, marker::PhantomData, sync::mpsc::Receiver, thread::spawn, time::Duration};
+use std::{
+    error,
+    marker::PhantomData,
+    sync::mpsc::Receiver,
+    thread::{sleep, spawn},
+    time::Duration,
+};
 
 use dbus::blocking::{Connection, Proxy};
 use log::{debug, error, info, trace};
 
-use crate::{DESTINATION, INTERFACE, PATH, message::NotificationMessage};
+use crate::{DESTINATION, INTERFACE, PATH, TIME_GRANULARITY, message::NotificationMessage};
 
 pub struct DBusService {
     //connection: Connection,
@@ -52,6 +58,7 @@ impl DBusService {
                         trace!("Nothing in to_send_out");
                     }
                 }
+                sleep(TIME_GRANULARITY);
             }
         });
     }

@@ -22,6 +22,7 @@ mod service;
 const DESTINATION: &str = "org.freedesktop.Notifications";
 const INTERFACE: &str = "org.freedesktop.Notifications";
 const PATH: &str = "/org/freedesktop/Notifications";
+const TIME_GRANULARITY: Duration = Duration::from_secs(1);
 
 fn main() {
     set_multithread_logger();
@@ -34,5 +35,7 @@ fn main() {
     parser.parse();
     service.unpile(to_send_out);
 
-    loop {}
+    loop {
+        sleep(TIME_GRANULARITY);
+    }
 }
