@@ -24,7 +24,7 @@ pub fn set_multithread_logger() {
     let (log_sender, log_receiver) = mpsc::channel();
 
     log::set_boxed_logger(Box::new(SimpleLogger { sender: log_sender })).unwrap();
-    log::set_max_level(log::LevelFilter::Trace);
+    log::set_max_level(log::LevelFilter::Debug);
 
     std::thread::spawn(move || {
         while let Ok(msg) = log_receiver.recv() {

@@ -10,11 +10,13 @@ use log::{LevelFilter, info};
 use crate::{
     logger::{SimpleLogger, set_multithread_logger},
     message::NotificationMessage,
+    parser::Parser,
     service::DBusService,
 };
 
 mod logger;
 mod message;
+mod parser;
 mod service;
 
 const DESTINATION: &str = "org.freedesktop.Notifications";
@@ -27,10 +29,10 @@ fn main() {
     let (to_send_in, to_send_out) = mpsc::channel::<NotificationMessage>();
 
     let service = DBusService::new();
-    service.unpile(to_send_out);
+    let parser = Parser::new(to_send_in);
 
-    let message = NotificationMessage::new("some application".to_string());
-    to_send_in.send(message).unwrap();
+    parser.parse();
+    service.unpile(to_send_out);
 
     loop {}
 }

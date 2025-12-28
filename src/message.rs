@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 use dbus::arg::{AppendAll, IterAppend, RefArg, Variant};
 use log::trace;
@@ -7,7 +7,7 @@ pub struct NotificationMessage {
     app_name: String,     //<arg direction="in" type="s" name="app_name"/>
     replaces_id: u32,     //<arg direction="in" type="u" name="replaces_id"/>
     app_icon: String,     //<arg direction="in" type="s" name="app_icon"/>
-    summary: String,      //<arg direction="in" type="s" name="summary"/>
+    pub summary: String,  //<arg direction="in" type="s" name="summary"/>
     body: String,         //<arg direction="in" type="s" name="body"/>
     actions: Vec<String>, //<arg direction="in" type="as" name="actions"/>
     hints: HashMap<String, Variant<Box<dyn RefArg>>>, //<arg direction="in" type="a{sv}" name="hints"/>
@@ -15,10 +15,11 @@ pub struct NotificationMessage {
 }
 
 impl NotificationMessage {
-    pub fn new(app_name: String) -> Self {
+    pub fn new(profile_name: String) -> Self {
+        let app_name = "AppArmor".to_string();
         let replaces_id: u32 = 0;
         let app_icon: String = "".to_string();
-        let summary: String = "".to_string();
+        let summary: String = format!("DENIED {}", profile_name);
         let body: String = "".to_string();
         let actions: Vec<String> = vec![];
         let mut hints: HashMap<String, Variant<Box<dyn RefArg>>> = HashMap::new();

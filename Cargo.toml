@@ -5,5 +5,7 @@ edition = "2024"
 
 [dependencies]
 dbus = "0.9.10"
-log = {version="0.4.29", features= ["std"]}
+inotify = { version = "0.11.0", features = ["stream"] }
+log = { version = "0.4.29", features = ["std"] }
+regex = "1.12.2"
 
