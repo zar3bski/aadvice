@@ -1,12 +1,10 @@
 use std::{
-    error,
-    marker::PhantomData,
-    sync::mpsc::Receiver,
+    sync::{Arc, atomic::AtomicBool, mpsc::Receiver},
     thread::{sleep, spawn},
     time::Duration,
 };
 
-use dbus::blocking::{Connection, Proxy};
+use dbus::blocking::Connection;
 use log::{debug, error, info, trace};
 
 use crate::{DESTINATION, INTERFACE, PATH, TIME_GRANULARITY, message::NotificationMessage};
@@ -17,7 +15,7 @@ pub struct DBusService {
 }
 
 impl DBusService {
-    pub fn new() -> Self {
+    pub fn new(_kill_swith: Arc<AtomicBool>) -> Self {
         //let proxy = connection.with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
 
         //Self { proxy }

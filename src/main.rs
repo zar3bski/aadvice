@@ -1,19 +1,16 @@
 use std::{
-    sync::mpsc,
-    thread::{sleep, spawn},
-    time::{self, Duration},
+    sync::{Arc, atomic::AtomicBool, mpsc},
+    thread::sleep,
+    time::Duration,
 };
 
-use dbus::blocking::{Connection, Proxy};
-use log::{LevelFilter, info};
 
 use crate::{
-    logger::{SimpleLogger, set_multithread_logger},
-    message::NotificationMessage,
-    parser::Parser,
-    service::DBusService,
+    conf::Configuration, logger::set_multithread_logger, message::NotificationMessage,
+    parser::Parser, service::DBusService,
 };
 
+mod conf;
 mod logger;
 mod message;
 mod parser;
@@ -26,11 +23,15 @@ const TIME_GRANULARITY: Duration = Duration::from_secs(1);
 
 fn main() {
     set_multithread_logger();
-
+    let config = Configuration {
+        ignore_complain: true,
+        watch_file: "/var/log/audit/audit.log".to_owned(),
+    };
+    let kill_switch = Arc::new(AtomicBool::new(false));
     let (to_send_in, to_send_out) = mpsc::channel::<NotificationMessage>();
 
-    let service = DBusService::new();
-    let parser = Parser::new(to_send_in);
+    let service = DBusService::new(kill_switch.clone());
+    let parser = Parser::new(&kill_switch, &config, to_send_in);
 
     parser.parse();
     service.unpile(to_send_out);

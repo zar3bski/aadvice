@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 use dbus::arg::{AppendAll, IterAppend, RefArg, Variant};
 use log::trace;
@@ -22,7 +22,7 @@ impl NotificationMessage {
         let summary: String = format!("DENIED {}", profile_name);
         let body: String = "".to_string();
         let actions: Vec<String> = vec![];
-        let mut hints: HashMap<String, Variant<Box<dyn RefArg>>> = HashMap::new();
+        let hints: HashMap<String, Variant<Box<dyn RefArg>>> = HashMap::new();
         let timeout: i32 = 3000;
 
         Self {
