@@ -260,4 +260,34 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
         }
         let _ = remove_dir_all(&test_folder_path);
     }
+
+    #[test]
+    fn test_ignore_preexisting() {
+        let (test_folder_path, log_path) = test_dir!();
+        let (kill_switch, to_send_in, to_send_out) = test_channels!();
+        let config = Configuration {
+            ignore_complain: true,
+            watch_file: log_path.to_owned(),
+        };
+
+        {
+            let mut file = File::create(&log_path).unwrap();
+
+            // messages....
+            let _ = file.write(
+                br#"
+type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+type=AVC msg=audit(1773304077.386:5114): apparmor="ALLOWED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+"#).unwrap();
+
+            // ...that pre-exist parser instantiation
+            let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
+            parser.parse();
+            sleep(THREAD_LATENCY);
+
+            // should not end up in the channel
+            assert!(to_send_out.try_recv().is_err());
+        }
+    }
 }
