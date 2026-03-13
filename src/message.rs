@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dbus::arg::{AppendAll, IterAppend, RefArg, Variant};
+use dbus::arg::{AppendAll, IterAppend, ReadAll, RefArg, Variant};
 use log::trace;
 
 pub struct NotificationMessage {

@@ -34,7 +34,7 @@ impl Parser {
         watcher
             .watches()
             .add(&watch_file, WatchMask::ALL_EVENTS)
-            .expect("Failed to watch for file modifications");
+            .expect(format!("Failed to watch for file modifications of {}", watch_file).as_str());
 
         let cancel_token = kill_switch.clone();
 
@@ -141,7 +141,7 @@ mod test {
     use std::{
         fs::{self, File, create_dir, remove_dir_all},
         io::Write,
-        sync::{atomic::Ordering, mpsc},
+        sync::atomic::Ordering,
         thread::sleep,
         time::Duration,
     };
@@ -167,8 +167,10 @@ mod test {
     #[macro_export]
     macro_rules! test_channels {
         ( $( $x:expr ),* ) => {{
+            use std::sync::atomic::AtomicBool;
+            use std::sync::mpsc::channel;
             let kill_switch = Arc::new(AtomicBool::new(false));
-            let (to_send_in, to_send_out) = mpsc::channel::<NotificationMessage>();
+            let (to_send_in, to_send_out) = channel::<NotificationMessage>();
             (kill_switch, to_send_in, to_send_out)
         }};
     }

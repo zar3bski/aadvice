@@ -1,87 +1,87 @@
 use std::{
-    sync::{Arc, atomic::AtomicBool, mpsc::Receiver},
-    thread::{sleep, spawn},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
+    },
+    thread::spawn,
     time::Duration,
 };
 
-use dbus::blocking::Connection;
-use log::{debug, error, info, trace};
+use dbus::blocking::{Connection, Proxy};
+use log::{debug, warn};
 
-use crate::{DESTINATION, INTERFACE, PATH, TIME_GRANULARITY, message::NotificationMessage};
+use crate::{DESTINATION, INTERFACE, PATH, conf::Configuration, message::NotificationMessage};
 
 pub struct DBusService {
-    //connection: Connection,
-    //proxy: Proxy<'a, &'a Connection>,
+    connection: Connection,
+    inbound: Receiver<NotificationMessage>,
+    cancel_token: Arc<AtomicBool>,
 }
 
 impl DBusService {
-    pub fn new(_kill_swith: Arc<AtomicBool>) -> Self {
-        //let proxy = connection.with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
-
-        //Self { proxy }
-        Self {}
+    pub fn new(
+        kill_swith: &Arc<AtomicBool>,
+        _config: &Configuration,
+        inbound: Receiver<NotificationMessage>,
+    ) -> Self {
+        let cancel_token = kill_swith.clone();
+        let connection = Connection::new_session().expect("D-Bus connection failed");
+        Self {
+            connection,
+            inbound,
+            cancel_token,
+        }
     }
 
-    //fn proxy(&self) -> Proxy<'a, &'a Connection> {
-    //    let connection = Connection::new_session().expect("D-Bus connection failed");
-    //    let proxy = connection.with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
-    //    proxy
-    //}
-
-    pub fn unpile(&self, channel: Receiver<NotificationMessage>) {
+    pub fn unpile(self) {
+        debug!("Start unpiling messages");
         spawn(move || {
-            // TODO: move elsewhere
-            info!("Setting proxy connection");
-            let connection = Connection::new_session().expect("D-Bus connection failed");
-            let proxy = connection.with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
-            info!("Proxy connection established");
-            loop {
-                let received = channel.recv();
-                debug!("Received message to be sent through D-Bus");
-                match received {
-                    Ok(message) => {
+            let proxy: Proxy<'_, &Connection> =
+                self.connection
+                    .with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
+
+            'unpile: loop {
+                match self.inbound.recv() {
+                    Ok(m) => {
                         let resp: Result<(u32,), dbus::Error> =
-                            proxy.method_call(INTERFACE, "Notify", message);
+                            proxy.method_call(INTERFACE, "Notify", m);
                         match resp {
-                            Ok((code,)) => {
-                                debug!("Message send through D-Bus successfully: code: {}", code);
+                            Ok(code) => {
+                                debug!(
+                                    "Message successfully forwarded to {INTERFACE}: code {code:?}"
+                                )
                             }
                             Err(e) => {
-                                error!("Could not send notification through D-Bus: {}", e)
+                                warn!("Failed to forward message through D-bus: {e}");
                             }
                         }
-                        //debug!("Sending message to D-Bus");
                     }
-                    Err(_) => {
-                        trace!("Nothing in to_send_out");
-                    }
+                    Err(_) => {}
                 }
-                sleep(TIME_GRANULARITY);
+                if self.cancel_token.load(Ordering::Relaxed) == true {
+                    debug!("DBus service: cancellation token received");
+                    break 'unpile;
+                }
             }
         });
     }
 }
 
-//impl<'a> DBusService<'a> {
-//    fn new() -> Self {
-//        let connection = Connection::new_session().expect("D-Bus connection failed");
-//        let proxy = connection.with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
-//        Self {
-//            //connection,
-//            proxy,
-//        }
-//    }
-//}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::test_channels;
 
-//impl<'a> Default for DBusService<'a> {
-//    fn default() -> Self {
-//        //let connection = Connection::new_session().expect("D-Bus connection failed");
-//        let proxy = Connection::new_session()
-//            .expect("D-Bus connection failed")
-//            .with_proxy(DESTINATION, PATH, Duration::from_millis(5000));
-//        Self {
-//            //connection: &connection,
-//            proxy: &proxy,
-//        }
-//    }
-//}
+    #[test]
+    fn test_instanciation() {
+        let (kill_switch, _to_send_in, to_send_out) = test_channels!();
+        let config = Configuration {
+            ignore_complain: true,
+            watch_file: "/whatever".to_owned(),
+        };
+
+        let _service = DBusService::new(&kill_switch, &config, to_send_out);
+        let _message: NotificationMessage = NotificationMessage::new("toto".to_owned());
+    }
+}
