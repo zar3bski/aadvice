@@ -194,8 +194,8 @@ mod test {
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
         let config = Configuration {
-            ignore_complain: true,
             watch_file: log_path.to_owned(),
+            log_level: log::LevelFilter::Debug,
         };
         {
             let mut file = File::create(&log_path).unwrap();
@@ -226,8 +226,8 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
         let config = Configuration {
-            ignore_complain: true,
             watch_file: log_path.to_owned(),
+            log_level: log::LevelFilter::Debug,
         };
 
         {
@@ -266,8 +266,8 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
         let config = Configuration {
-            ignore_complain: true,
             watch_file: log_path.to_owned(),
+            log_level: log::LevelFilter::Debug,
         };
 
         {

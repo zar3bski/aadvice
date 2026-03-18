@@ -1,6 +1,6 @@
 use std::sync::mpsc::{self, Sender};
 
-use log::{Level, Metadata, Record};
+use log::{Level, LevelFilter, Metadata, Record};
 
 pub struct SimpleLogger {
     pub sender: Sender<String>,
@@ -20,11 +20,11 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
-pub fn set_multithread_logger() {
+pub fn set_multithread_logger(level: LevelFilter) {
     let (log_sender, log_receiver) = mpsc::channel();
 
     log::set_boxed_logger(Box::new(SimpleLogger { sender: log_sender })).unwrap();
-    log::set_max_level(log::LevelFilter::Debug);
+    log::set_max_level(level);
 
     std::thread::spawn(move || {
         while let Ok(msg) = log_receiver.recv() {

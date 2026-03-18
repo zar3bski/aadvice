@@ -76,10 +76,7 @@ mod test {
     #[test]
     fn test_instanciation() {
         let (kill_switch, _to_send_in, to_send_out) = test_channels!();
-        let config = Configuration {
-            ignore_complain: true,
-            watch_file: "/whatever".to_owned(),
-        };
+        let config = Configuration::default();
 
         let _service = DBusService::new(&kill_switch, &config, to_send_out);
         let _message: NotificationMessage = NotificationMessage::new("toto".to_owned());

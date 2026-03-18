@@ -9,7 +9,12 @@ use crate::conf::Configuration;
 static HELP_SYMBOL: LazyLock<String> = LazyLock::new(|| "--help".to_string());
 
 fn print_help() {
-    todo!()
+    println!(
+        r#"usage:
+    aadvice [--watch_file    </path/to/audit.log>]
+            [--log_level  <debug|info|warn|error>]   
+    "#
+    );
 }
 
 pub fn parse_args<T>(mut args: T) -> Option<Configuration>
@@ -52,6 +57,8 @@ where
 mod test {
     use std::default;
 
+    use log::Level;
+
     use super::*;
     #[test]
     fn test_default() {
@@ -61,8 +68,8 @@ mod test {
 
         assert!(config.is_some());
         let config = config.unwrap();
-        assert_eq!(config.ignore_complain, default_config.ignore_complain);
-        assert_eq!(config.watch_file, default_config.watch_file)
+        assert_eq!(config.watch_file, default_config.watch_file);
+        assert_eq!(config.log_level, Level::Info);
     }
 
     #[test]
@@ -78,8 +85,8 @@ mod test {
             "aadvice",
             "--watch_file",
             "/var/log/audit.log",
-            "--ignore_complain",
-            "true",
+            "--log_level",
+            "debug",
         ]
         .iter()
         .map(|s| s.to_string());
@@ -89,6 +96,6 @@ mod test {
         let config = config.unwrap();
 
         assert_eq!(config.watch_file, "/var/log/audit.log".to_owned());
-        assert_eq!(config.ignore_complain, true)
+        assert_eq!(config.log_level, Level::Debug)
     }
 }
