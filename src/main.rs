@@ -18,9 +18,6 @@ mod message;
 mod parser;
 mod service;
 
-const DESTINATION: &str = "org.freedesktop.Notifications";
-const INTERFACE: &str = "org.freedesktop.Notifications";
-const PATH: &str = "/org/freedesktop/Notifications";
 const TIME_GRANULARITY: Duration = Duration::from_secs(1);
 
 fn main() {

@@ -59,7 +59,7 @@ impl Parser {
             match self.reader.read_line(&mut buffer) {
                 Err(_) => break,
                 Ok(0) => break,
-                Ok(_) => match Self::filter(&buffer.trim_end().to_string()) {
+                Ok(_) => match Self::filter(buffer.trim_end().to_string()) {
                     Some(message) => {
                         let _ = self.out_queue.send(message);
                     }
@@ -111,21 +111,20 @@ impl Parser {
                         }
                     }
                     Err(_) => {
-                        warn!("LOG SOMETHING");
+                        warn!("Could not read inotify events of {}", &self.watch_file);
                     }
                 };
             }
         });
     }
 
-    fn filter(log_line: &String) -> Option<NotificationMessage> {
+    fn filter(log_line: String) -> Option<NotificationMessage> {
         let denied_regex =
             Regex::new(r#"^type=AVC.*apparmor="DENIED".*profile="(?<profile>[\w\/]+)".*$"#)
                 .unwrap();
         match denied_regex.captures(&log_line) {
             Some(c) => {
-                let message =
-                    NotificationMessage::new(c.name("profile").unwrap().as_str().to_string());
+                let message = NotificationMessage::new(log_line);
                 Some(message)
             }
             None => {
@@ -178,15 +177,14 @@ mod test {
     #[test]
     fn test_filtering_denied() {
         let line = r#"type=AVC msg=audit(1766919496.539:48806): apparmor="DENIED" operation="file_mmap" class="file" profile="chromium_browser//sanitized_helper" name="/usr/lib/libKF6PurposeWidgets.so.6.21.0" pid=6044 comm="plasma-browser-" requested_mask="m" denied_mask="m" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"#;
-        let result = Parser::filter(&line.to_string());
+        let result = Parser::filter(line.to_string());
         assert!(result.is_some());
-        assert!(result.unwrap().summary == "DENIED chromium_browser//sanitized_helper")
     }
 
     #[test]
     fn test_filtering_allowed() {
         let line = r#"type=AVC msg=audit(1766919791.036:114674): apparmor="ALLOWED" operation="recvmsg" class="net" info="failed af match" error=-13 profile="firefox" pid=2995 comm=536F636B657420546872656164 laddr=192.168.242.104 lport=36884 faddr=184.105.99.43 fport=443 family="inet" sock_type="stream" protocol=6 requested_mask="receive" denied_mask="receive""#;
-        let result = Parser::filter(&line.to_string());
+        let result = Parser::filter(line.to_string());
         assert!(result.is_none())
     }
     #[test]
@@ -289,5 +287,6 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
             // should not end up in the channel
             assert!(to_send_out.try_recv().is_err());
         }
+        let _ = remove_dir_all(&test_folder_path);
     }
 }

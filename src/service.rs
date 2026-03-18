@@ -11,7 +11,11 @@ use std::{
 use dbus::blocking::{Connection, Proxy};
 use log::{debug, warn};
 
-use crate::{DESTINATION, INTERFACE, PATH, conf::Configuration, message::NotificationMessage};
+use crate::{conf::Configuration, message::NotificationMessage};
+
+const DESTINATION: &str = "org.freedesktop.Notifications";
+const INTERFACE: &str = "org.freedesktop.Notifications";
+const PATH: &str = "/org/freedesktop/Notifications";
 
 pub struct DBusService {
     connection: Connection,
@@ -70,8 +74,12 @@ impl DBusService {
 
 #[cfg(test)]
 mod test {
+    use std::thread::sleep;
+
     use super::*;
     use crate::test_channels;
+
+    const THREAD_LATENCY: Duration = Duration::from_millis(50);
 
     #[test]
     fn test_instanciation() {
@@ -79,6 +87,16 @@ mod test {
         let config = Configuration::default();
 
         let _service = DBusService::new(&kill_switch, &config, to_send_out);
-        let _message: NotificationMessage = NotificationMessage::new("toto".to_owned());
+
+        let log_line = r#"type=AVC msg=audit(1766919496.539:48806): apparmor="DENIED" operation="file_mmap" class="file" profile="chromium_browser//sanitized_helper" name="/usr/lib/libKF6PurposeWidgets.so.6.21.0" pid=6044 comm="plasma-browser-" requested_mask="m" denied_mask="m" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root""#.to_owned();
+        let _message: NotificationMessage = NotificationMessage::new(log_line);
+        let _ = _to_send_in.send(_message);
+
+        let log_line = r#"type=AVC msg=audit(1390876383.602:15646): apparmor="DENIED" operation="open" parent=21147 profile="/tmp/ls" name="/var/log/audit/" pid=21598 comm="ls" requested_mask="r" denied_mask="r" fsuid=0 ouid=0"#.to_owned();
+        let _message: NotificationMessage = NotificationMessage::new(log_line);
+        let _ = _to_send_in.send(_message);
+
+        _service.unpile();
+        sleep(THREAD_LATENCY);
     }
 }
