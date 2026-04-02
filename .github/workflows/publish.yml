@@ -1,0 +1,55 @@
+name: Publish
+
+on:
+    push:
+        tags:
+            - "[0-9]+.[0-9]+.[0-9]+*"
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build_x64:
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: write
+            pull-requests: write
+            repository-projects: write
+
+        # additional settings
+        # - rustup target add aarch64-unknown-linux-gnu
+        # - sudo apt install libdbus-1-dev pkg-config
+        # - cargo install cross --git https://github.com/cross-rs/cross
+
+        steps:
+            - uses: actions/checkout@v6
+            - name: Edit Cargo.toml to reflect the tag
+              run: sed -i -E 's/^version = "[0-9]+.[0-9]+.[0-9]+*"/version = "${{ github.ref_name }}"/' Cargo.toml
+            - name: Install cross compilation dependencies
+              run: |
+                  rustup target add aarch64-unknown-linux-gnu
+                  sudo apt install libdbus-1-dev pkg-config
+            - name: Build
+              run: |
+                  cargo build --release --target=x86_64-unknown-linux-gnu
+                  cargo build --release --target=aarch64-unknown-linux-gnu
+            #- name: Get release
+            #  id: get_release
+            #  uses: bruceadams/get-release@v1.3.2
+            #  env:
+            #      GITHUB_TOKEN: ${{ github.token }}
+            #- name: Upload release binary
+            #  uses: actions/upload-release-asset@v1.0.2
+            #  env:
+            #      GITHUB_TOKEN: ${{ github.token }}
+            #  with:
+            #      upload_url: ${{ steps.get_release.outputs.upload_url }}
+            #      asset_path: ./target/release/ds-companion
+            #      asset_name: ds-companion-x86_64
+            #      asset_content_type: application/octet-stream
+            #- name: Push incremented Cargo.toml to current branch
+            #  uses: stefanzweifel/git-auto-commit-action@v5
+            #  with:
+            #      commit_message: "chore: update version in Cargo.toml"
+            #      branch: main
