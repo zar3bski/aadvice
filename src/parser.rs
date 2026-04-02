@@ -138,7 +138,7 @@ impl Parser {
 #[cfg(test)]
 mod test {
     use std::{
-        fs::{self, File, create_dir, remove_dir_all},
+        fs::{self, File, create_dir, create_dir_all, remove_dir_all},
         io::Write,
         sync::atomic::Ordering,
         thread::sleep,
@@ -153,7 +153,7 @@ mod test {
     macro_rules! test_dir {
         ( $( $x:expr ),* ) => {{
             use rand::distr::{Alphanumeric, SampleString};
-            let _ = create_dir("./test/.tmp");
+            let _ = create_dir_all("./test/.tmp");
             let test_id = Alphanumeric.sample_string(&mut rand::rng(), 16);
             let test_folder_path = format!("./test/.tmp/{}", test_id);
             let log_path = format!("{}/audit.log", &test_folder_path);
@@ -196,7 +196,13 @@ mod test {
             log_level: log::LevelFilter::Debug,
         };
         {
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
             parser.parse();
@@ -229,7 +235,13 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
         };
 
         {
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
             parser.parse();
@@ -239,7 +251,13 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
             sleep(THREAD_LATENCY);
             // file rotation
             fs::rename(&log_path, format!("{}.1", &log_path)).unwrap();
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             let _ = file.write(
                 br#"type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root""#).unwrap();
@@ -247,7 +265,13 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
             sleep(THREAD_LATENCY);
             // file rotation
             fs::rename(&log_path, format!("{}.2", &log_path)).unwrap();
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
             let _ = file.write(
                 br#"type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root""#).unwrap();
 
@@ -269,7 +293,13 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
         };
 
         {
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             // messages....
             let _ = file.write(
