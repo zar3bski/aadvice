@@ -10,5 +10,6 @@ log = { version = "0.4.29", features = ["std"] }
 regex = "1.12.2"
 
 [dev-dependencies]
+ntest = "0.9.5"
 rand = "0.10.0"
 

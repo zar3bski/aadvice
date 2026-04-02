@@ -6,7 +6,8 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc::Sender,
     },
-    thread::spawn,
+    thread::{sleep, spawn},
+    time::Duration,
 };
 
 use inotify::{EventMask, Inotify, WatchMask};
@@ -33,7 +34,7 @@ impl Parser {
         let watcher = Inotify::init().expect("Error while initializing inotify instance");
         watcher
             .watches()
-            .add(&watch_file, WatchMask::ALL_EVENTS)
+            .add(&watch_file, WatchMask::MOVE_SELF | WatchMask::MODIFY)
             .expect(format!("Failed to watch for file modifications of {}", watch_file).as_str());
 
         let cancel_token = kill_switch.clone();
@@ -73,10 +74,25 @@ impl Parser {
 
     pub fn rotate(&mut self) {
         info!("Log rotation detected, switching to the new log file");
-        self.watcher
-            .watches()
-            .add(self.watch_file.clone(), WatchMask::ALL_EVENTS)
-            .expect("Failed to watch for file modifications");
+        let mut attempt: u8 = 0;
+        'wait_for_new_log_file: loop {
+            match self.watcher.watches().add(
+                self.watch_file.clone(),
+                WatchMask::MOVE_SELF | WatchMask::MODIFY,
+            ) {
+                Ok(_) => {
+                    break 'wait_for_new_log_file;
+                }
+                Err(_) => {
+                    sleep(Duration::from_millis(10));
+                    attempt += 1
+                }
+            }
+            if attempt == 10 {
+                panic!("New log file not detected during rotation")
+            }
+        }
+
         self.reader = BufReader::new(
             File::open(&self.watch_file)
                 .expect(format!("Could not read {}", self.watch_file).as_str()),
@@ -105,7 +121,7 @@ impl Parser {
                                 }
                                 EventMask::MODIFY => self.read_lines(),
                                 e => {
-                                    trace!("inode event: {e:?}")
+                                    info!("inode event: {e:?}")
                                 }
                             }
                         }
@@ -145,6 +161,10 @@ mod test {
         time::Duration,
     };
 
+    use ntest::timeout;
+
+    use crate::logger::set_multithread_logger;
+
     use super::*;
 
     const THREAD_LATENCY: Duration = Duration::from_millis(50);
@@ -182,12 +202,14 @@ mod test {
     }
 
     #[test]
+    #[timeout(1000)]
     fn test_filtering_allowed() {
         let line = r#"type=AVC msg=audit(1766919791.036:114674): apparmor="ALLOWED" operation="recvmsg" class="net" info="failed af match" error=-13 profile="firefox" pid=2995 comm=536F636B657420546872656164 laddr=192.168.242.104 lport=36884 faddr=184.105.99.43 fport=443 family="inet" sock_type="stream" protocol=6 requested_mask="receive" denied_mask="receive""#;
         let result = Parser::filter(line.to_string());
         assert!(result.is_none())
     }
     #[test]
+    #[timeout(1000)]
     fn test_capture_denied() {
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
@@ -226,7 +248,9 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
     }
 
     #[test]
+    #[timeout(2000)]
     fn test_log_rotation() {
+        set_multithread_logger(log::LevelFilter::Trace);
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
         let config = Configuration {
