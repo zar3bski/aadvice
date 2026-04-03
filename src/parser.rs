@@ -6,7 +6,8 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc::Sender,
     },
-    thread::spawn,
+    thread::{sleep, spawn},
+    time::Duration,
 };
 
 use inotify::{EventMask, Inotify, WatchMask};
@@ -33,14 +34,23 @@ impl Parser {
         let watcher = Inotify::init().expect("Error while initializing inotify instance");
         watcher
             .watches()
-            .add(&watch_file, WatchMask::ALL_EVENTS)
-            .expect("Failed to watch for file modifications");
+            .add(&watch_file, WatchMask::MOVE_SELF | WatchMask::MODIFY)
+            .unwrap_or_else(|_| panic!("Failed to watch for file modifications of {}", watch_file));
 
         let cancel_token = kill_switch.clone();
 
-        let reader = BufReader::new(
-            File::open(&watch_file).expect(format!("Could not read {}", &watch_file).as_str()),
+        let mut reader = BufReader::new(
+            File::open(&watch_file).unwrap_or_else(|_| panic!("Could not read {}", &watch_file)),
         );
+
+        let mut buffer = String::new();
+        'skip_first_lines: loop {
+            match reader.read_line(&mut buffer) {
+                Err(_) => break 'skip_first_lines,
+                Ok(0) => break 'skip_first_lines,
+                _ => {}
+            }
+        }
 
         Self {
             watch_file,
@@ -59,7 +69,7 @@ impl Parser {
             match self.reader.read_line(&mut buffer) {
                 Err(_) => break,
                 Ok(0) => break,
-                Ok(_) => match Self::filter(&buffer.trim_end().to_string()) {
+                Ok(_) => match Self::filter(buffer.trim_end().to_string()) {
                     Some(message) => {
                         let _ = self.out_queue.send(message);
                     }
@@ -73,13 +83,28 @@ impl Parser {
 
     pub fn rotate(&mut self) {
         info!("Log rotation detected, switching to the new log file");
-        self.watcher
-            .watches()
-            .add(self.watch_file.clone(), WatchMask::ALL_EVENTS)
-            .expect("Failed to watch for file modifications");
+        let mut attempt: u8 = 0;
+        'wait_for_new_log_file: loop {
+            match self.watcher.watches().add(
+                self.watch_file.clone(),
+                WatchMask::MOVE_SELF | WatchMask::MODIFY,
+            ) {
+                Ok(_) => {
+                    break 'wait_for_new_log_file;
+                }
+                Err(_) => {
+                    sleep(Duration::from_millis(10));
+                    attempt += 1
+                }
+            }
+            if attempt == 10 {
+                panic!("New log file not detected during rotation")
+            }
+        }
+
         self.reader = BufReader::new(
             File::open(&self.watch_file)
-                .expect(format!("Could not read {}", self.watch_file).as_str()),
+                .unwrap_or_else(|_| panic!("Could not read {}", self.watch_file)),
         );
     }
 
@@ -89,7 +114,7 @@ impl Parser {
 
         spawn(move || {
             'parse_loop: loop {
-                if self.cancel_token.load(Ordering::Relaxed) == true {
+                if self.cancel_token.load(Ordering::Relaxed) {
                     debug!("Parser: cancellation token received");
                     drop(self.reader);
                     break 'parse_loop;
@@ -105,27 +130,26 @@ impl Parser {
                                 }
                                 EventMask::MODIFY => self.read_lines(),
                                 e => {
-                                    trace!("inode event: {e:?}")
+                                    info!("inode event: {e:?}")
                                 }
                             }
                         }
                     }
                     Err(_) => {
-                        warn!("LOG SOMETHING");
+                        warn!("Could not read inotify events of {}", &self.watch_file);
                     }
                 };
             }
         });
     }
 
-    fn filter(log_line: &String) -> Option<NotificationMessage> {
+    fn filter(log_line: String) -> Option<NotificationMessage> {
         let denied_regex =
             Regex::new(r#"^type=AVC.*apparmor="DENIED".*profile="(?<profile>[\w\/]+)".*$"#)
                 .unwrap();
         match denied_regex.captures(&log_line) {
-            Some(c) => {
-                let message =
-                    NotificationMessage::new(c.name("profile").unwrap().as_str().to_string());
+            Some(_c) => {
+                let message = NotificationMessage::new(log_line);
                 Some(message)
             }
             None => {
@@ -139,12 +163,16 @@ impl Parser {
 #[cfg(test)]
 mod test {
     use std::{
-        fs::{self, File, create_dir, remove_dir_all},
+        fs::{self, File, create_dir, create_dir_all, remove_dir_all},
         io::Write,
-        sync::{atomic::Ordering, mpsc},
+        sync::atomic::Ordering,
         thread::sleep,
         time::Duration,
     };
+
+    use ntest::timeout;
+
+    use crate::logger::set_multithread_logger;
 
     use super::*;
 
@@ -154,7 +182,7 @@ mod test {
     macro_rules! test_dir {
         ( $( $x:expr ),* ) => {{
             use rand::distr::{Alphanumeric, SampleString};
-            let _ = create_dir("./test/.tmp");
+            let _ = create_dir_all("./test/.tmp");
             let test_id = Alphanumeric.sample_string(&mut rand::rng(), 16);
             let test_folder_path = format!("./test/.tmp/{}", test_id);
             let log_path = format!("{}/audit.log", &test_folder_path);
@@ -167,8 +195,10 @@ mod test {
     #[macro_export]
     macro_rules! test_channels {
         ( $( $x:expr ),* ) => {{
+            use std::sync::atomic::AtomicBool;
+            use std::sync::mpsc::channel;
             let kill_switch = Arc::new(AtomicBool::new(false));
-            let (to_send_in, to_send_out) = mpsc::channel::<NotificationMessage>();
+            let (to_send_in, to_send_out) = channel::<NotificationMessage>();
             (kill_switch, to_send_in, to_send_out)
         }};
     }
@@ -176,27 +206,34 @@ mod test {
     #[test]
     fn test_filtering_denied() {
         let line = r#"type=AVC msg=audit(1766919496.539:48806): apparmor="DENIED" operation="file_mmap" class="file" profile="chromium_browser//sanitized_helper" name="/usr/lib/libKF6PurposeWidgets.so.6.21.0" pid=6044 comm="plasma-browser-" requested_mask="m" denied_mask="m" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"#;
-        let result = Parser::filter(&line.to_string());
+        let result = Parser::filter(line.to_string());
         assert!(result.is_some());
-        assert!(result.unwrap().summary == "DENIED chromium_browser//sanitized_helper")
     }
 
     #[test]
+    #[timeout(1000)]
     fn test_filtering_allowed() {
         let line = r#"type=AVC msg=audit(1766919791.036:114674): apparmor="ALLOWED" operation="recvmsg" class="net" info="failed af match" error=-13 profile="firefox" pid=2995 comm=536F636B657420546872656164 laddr=192.168.242.104 lport=36884 faddr=184.105.99.43 fport=443 family="inet" sock_type="stream" protocol=6 requested_mask="receive" denied_mask="receive""#;
-        let result = Parser::filter(&line.to_string());
+        let result = Parser::filter(line.to_string());
         assert!(result.is_none())
     }
     #[test]
+    #[timeout(1000)]
     fn test_capture_denied() {
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
         let config = Configuration {
-            ignore_complain: true,
             watch_file: log_path.to_owned(),
+            log_level: log::LevelFilter::Debug,
         };
         {
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
             parser.parse();
@@ -220,16 +257,24 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
     }
 
     #[test]
+    #[timeout(2000)]
     fn test_log_rotation() {
+        set_multithread_logger(log::LevelFilter::Trace);
         let (test_folder_path, log_path) = test_dir!();
         let (kill_switch, to_send_in, to_send_out) = test_channels!();
         let config = Configuration {
-            ignore_complain: true,
             watch_file: log_path.to_owned(),
+            log_level: log::LevelFilter::Debug,
         };
 
         {
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
             parser.parse();
@@ -239,7 +284,13 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
             sleep(THREAD_LATENCY);
             // file rotation
             fs::rename(&log_path, format!("{}.1", &log_path)).unwrap();
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
 
             let _ = file.write(
                 br#"type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root""#).unwrap();
@@ -247,7 +298,13 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
             sleep(THREAD_LATENCY);
             // file rotation
             fs::rename(&log_path, format!("{}.2", &log_path)).unwrap();
-            let mut file = File::create(&log_path).unwrap();
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
             let _ = file.write(
                 br#"type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root""#).unwrap();
 
@@ -255,6 +312,49 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
                 // should get 3 messages
                 assert!(to_send_out.recv().is_ok());
             }
+        }
+        let _ = remove_dir_all(&test_folder_path);
+    }
+
+    #[test]
+    fn test_ignore_preexisting() {
+        let (test_folder_path, log_path) = test_dir!();
+        let (kill_switch, to_send_in, to_send_out) = test_channels!();
+        let config = Configuration {
+            watch_file: log_path.to_owned(),
+            log_level: log::LevelFilter::Debug,
+        };
+
+        {
+            let mut file = match File::create(&log_path) {
+                Ok(file) => file,
+                Err(e) => {
+                    println!("{} could not be created: {}", &log_path, e);
+                    panic!()
+                }
+            };
+
+            // messages....
+            let _ = file.write(
+                br#"
+type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+type=AVC msg=audit(1773304077.386:5114): apparmor="ALLOWED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+"#).unwrap();
+
+            // ...that pre-exist parser instantiation
+            let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
+            parser.parse();
+
+            let _ = file.write(
+                br#"
+type=AVC msg=audit(1773304077.386:5114): apparmor="ALLOWED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+"#).unwrap();
+
+            sleep(THREAD_LATENCY);
+
+            // should not end up in the channel
+            assert!(to_send_out.try_recv().is_err());
         }
         let _ = remove_dir_all(&test_folder_path);
     }

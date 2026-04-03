@@ -1,0 +1,57 @@
+name: Publish
+
+on:
+    push:
+        tags:
+            - "[0-9]+.[0-9]+.[0-9]+*"
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: write
+            pull-requests: write
+            repository-projects: write
+
+        steps:
+            - uses: actions/checkout@v6
+            - name: Edit Cargo.toml to reflect the tag
+              run: sed -i -E 's/^version = "[0-9]+.[0-9]+.[0-9]+*"/version = "${{ github.ref_name }}"/' Cargo.toml
+            - name: Install cross compilation dependencies
+              run: |
+                  cargo install cross --git https://github.com/cross-rs/cross
+            - name: Build AMD64
+              run: |
+                  cargo clean
+                  cross build --release --target=x86_64-unknown-linux-gnu
+            - name: Upload AMD binary
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  mv target/x86_64-unknown-linux-gnu/release/aadvise \
+                      target/x86_64-unknown-linux-gnu/release/aadvise-x86_64
+                  gh release upload ${{ github.ref_name }} \
+                      target/x86_64-unknown-linux-gnu/release/aadvise-x86_64 \
+                      --clobber
+            - name: Build ARM64
+              run: |
+                  cargo clean
+                  cross build --release --target=aarch64-unknown-linux-gnu
+            - name: Upload ARM binary
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  mv target/aarch64-unknown-linux-gnu/release/aadvise \
+                      target/aarch64-unknown-linux-gnu/release/aadvise-aarch64
+                  gh release upload ${{ github.ref_name }} \
+                      target/aarch64-unknown-linux-gnu/release/aadvise-aarch64 \
+                      --clobber
+            - name: Push incremented Cargo.toml to main
+              uses: stefanzweifel/git-auto-commit-action@v7
+              with:
+                  commit_message: "chore: update version in Cargo.toml"
+                  branch: main
