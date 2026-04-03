@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    cli::parse_args, logger::set_multithread_logger,
-    message::NotificationMessage, parser::Parser, service::DBusService,
+    cli::parse_args, logger::set_multithread_logger, message::NotificationMessage, parser::Parser,
+    service::DBusService,
 };
 
 mod cli;

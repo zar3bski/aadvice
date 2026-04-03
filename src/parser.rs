@@ -39,9 +39,18 @@ impl Parser {
 
         let cancel_token = kill_switch.clone();
 
-        let reader = BufReader::new(
+        let mut reader = BufReader::new(
             File::open(&watch_file).unwrap_or_else(|_| panic!("Could not read {}", &watch_file)),
         );
+
+        let mut buffer = String::new();
+        'skip_first_lines: loop {
+            match reader.read_line(&mut buffer) {
+                Err(_) => break 'skip_first_lines,
+                Ok(0) => break 'skip_first_lines,
+                _ => {}
+            }
+        }
 
         Self {
             watch_file,
@@ -336,6 +345,12 @@ type=AVC msg=audit(1773304077.386:5114): apparmor="DENIED" operation="file_inher
             // ...that pre-exist parser instantiation
             let parser = Parser::new(&kill_switch, &config, to_send_in.clone());
             parser.parse();
+
+            let _ = file.write(
+                br#"
+type=AVC msg=audit(1773304077.386:5114): apparmor="ALLOWED" operation="file_inherit" class="file" profile="id" name="/dev/dri/renderD128" pid=9108 comm="id" requested_mask="wr" denied_mask="wr" fsuid=1000 ouid=0FSUID="zar3bski" OUID="root"
+"#).unwrap();
+
             sleep(THREAD_LATENCY);
 
             // should not end up in the channel
