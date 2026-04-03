@@ -1,18 +1,13 @@
-use std::env;
-use std::env::Args;
-use std::sync::LazyLock;
-
-use log::debug;
-
 use crate::conf::Configuration;
+use std::sync::LazyLock;
 
 static HELP_SYMBOL: LazyLock<String> = LazyLock::new(|| "--help".to_string());
 
 fn print_help() {
     println!(
         r#"usage:
-    aadvice [--watch_file    </path/to/audit.log>]
-            [--log_level  <debug|info|warn|error>]   
+    aadvice [--watch_file    </path/to/audit.log>] default: /var/log/audit.log
+            [--log_level  <debug|info|warn|error>] default: info   
     "#
     );
 }
@@ -26,24 +21,20 @@ where
     'cli: loop {
         let key = args.next();
         let value = args.next();
-        match key {
-            None => break 'cli,
-            Some(key) => {
-                if key == *HELP_SYMBOL || value.is_none() {
+        match (key, value) {
+            (None, _) => break 'cli,
+            (Some(_), None) => {
+                print_help();
+                return None;
+            }
+            (Some(key_str), Some(value_str)) => {
+                if key_str == *HELP_SYMBOL || value_str == *HELP_SYMBOL {
                     print_help();
                     return None;
                 } else {
-                    let value = value.unwrap();
-                    if value == *HELP_SYMBOL {
+                    if default.set(key_str.replace("-", ""), value_str).is_err() {
                         print_help();
                         return None;
-                    }
-                    match default.set(key.replace("-", ""), value) {
-                        Err(_) => {
-                            print_help();
-                            return None;
-                        }
-                        _ => {}
                     }
                 }
             }
@@ -55,8 +46,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::default;
-
     use log::Level;
 
     use super::*;

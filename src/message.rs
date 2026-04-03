@@ -63,7 +63,7 @@ impl NotificationMessage {
         }
     }
 
-    fn parse(log_line: &String) -> (&str, &str, &str, &str, &str, &str) {
+    fn parse(log_line: &str) -> (&str, &str, &str, &str, &str, &str) {
         let operation = match RE_OPERATION.captures(log_line) {
             Some(c) => match c.get(1) {
                 Some(f) => f.as_str(),
@@ -127,7 +127,6 @@ impl AppendAll for NotificationMessage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use dbus::Message;
 
     #[test]
     fn test_field_extraction() {

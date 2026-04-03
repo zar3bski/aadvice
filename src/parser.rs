@@ -35,12 +35,12 @@ impl Parser {
         watcher
             .watches()
             .add(&watch_file, WatchMask::MOVE_SELF | WatchMask::MODIFY)
-            .expect(format!("Failed to watch for file modifications of {}", watch_file).as_str());
+            .unwrap_or_else(|_| panic!("Failed to watch for file modifications of {}", watch_file));
 
         let cancel_token = kill_switch.clone();
 
         let reader = BufReader::new(
-            File::open(&watch_file).expect(format!("Could not read {}", &watch_file).as_str()),
+            File::open(&watch_file).unwrap_or_else(|_| panic!("Could not read {}", &watch_file)),
         );
 
         Self {
@@ -95,7 +95,7 @@ impl Parser {
 
         self.reader = BufReader::new(
             File::open(&self.watch_file)
-                .expect(format!("Could not read {}", self.watch_file).as_str()),
+                .unwrap_or_else(|_| panic!("Could not read {}", self.watch_file)),
         );
     }
 
@@ -105,7 +105,7 @@ impl Parser {
 
         spawn(move || {
             'parse_loop: loop {
-                if self.cancel_token.load(Ordering::Relaxed) == true {
+                if self.cancel_token.load(Ordering::Relaxed) {
                     debug!("Parser: cancellation token received");
                     drop(self.reader);
                     break 'parse_loop;
@@ -139,7 +139,7 @@ impl Parser {
             Regex::new(r#"^type=AVC.*apparmor="DENIED".*profile="(?<profile>[\w\/]+)".*$"#)
                 .unwrap();
         match denied_regex.captures(&log_line) {
-            Some(c) => {
+            Some(_c) => {
                 let message = NotificationMessage::new(log_line);
                 Some(message)
             }

@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    cli::parse_args, conf::Configuration, logger::set_multithread_logger,
+    cli::parse_args, logger::set_multithread_logger,
     message::NotificationMessage, parser::Parser, service::DBusService,
 };
 

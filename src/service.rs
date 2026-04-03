@@ -38,6 +38,7 @@ impl DBusService {
         }
     }
 
+    #[allow(clippy::single_match)]
     pub fn unpile(self) {
         debug!("Start unpiling messages");
         spawn(move || {
@@ -63,7 +64,7 @@ impl DBusService {
                     }
                     Err(_) => {}
                 }
-                if self.cancel_token.load(Ordering::Relaxed) == true {
+                if self.cancel_token.load(Ordering::Relaxed) {
                     debug!("DBus service: cancellation token received");
                     break 'unpile;
                 }
