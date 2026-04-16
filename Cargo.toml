@@ -1,5 +1,5 @@
 [package]
-name = "aadvise"
+name = "aadvice"
 version = "0.1.0"
 edition = "2024"
 
@@ -15,6 +15,7 @@ rand = "0.10.0"
 
 [package.metadata.cross.build]
 pre-build = [
+    "apt-get update",
     "dpkg --add-architecture $CROSS_DEB_ARCH",
-    "apt-get update && apt-get --assume-yes install libdbus-1-dev:$CROSS_DEB_ARCH pkg-config libc6-dev:$CROSS_DEB_ARCH"
+    "apt-get --assume-yes install libdbus-1-dev:$CROSS_DEB_ARCH pkg-config libc6-dev:$CROSS_DEB_ARCH"
 ]
