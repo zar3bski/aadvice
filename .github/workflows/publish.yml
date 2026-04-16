@@ -24,14 +24,11 @@ jobs:
               run: sed -i -E 's/^version = "[0-9]+.[0-9]+.[0-9]+*"/version = "${{ github.ref_name }}"/' Cargo.toml
             - name: Install cross
               run: |
-                  wget https://github.com/cross-rs/cross/releases/download/${{ env.CROSS_VERSION }}/cross-x86_64-unknown-linux-gnu.tar.gz
-                  tar -xf cross-x86_64-unknown-linux-gnu.tar.gz
-                  sudo cp cross /usr/local/bin
-                  sudo cp cross-util /usr/local/bin
+                  cargo install cross --git https://github.com/cross-rs/cross
             - name: Build AMD64
               run: |
                   cargo clean
-                  ./cross build --release --target=x86_64-unknown-linux-gnu
+                  cross build --release --target=x86_64-unknown-linux-gnu
             - name: Upload AMD binary
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +41,7 @@ jobs:
             - name: Build ARM64
               run: |
                   cargo clean
-                  ./cross build --release --target=aarch64-unknown-linux-gnu
+                  cross build --release --target=aarch64-unknown-linux-gnu
             - name: Upload ARM binary
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
