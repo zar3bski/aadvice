@@ -1,21 +1,23 @@
 # aadvice
 
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/zar3bski/aadvice/publish.yml?style=flat-square)
+![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/zar3bski%2Faadvice?branch=main&style=flat-square)
 ![Static Badge](https://img.shields.io/badge/arch-ARM64-blue?style=flat-square)
 ![Static Badge](https://img.shields.io/badge/arch-AMD64-blue?style=flat-square)
-![GitHub Release](https://img.shields.io/github/v/release/zar3bski/aadvice?style=flat-square)
+![GitLab Release](https://img.shields.io/gitlab/v/release/zar3bski%2Faadvice?style=flat-square)
 
 D-Bus based AppArmor notifier for org.freedesktop.Notifications
 
+> This project is hosted on **Gitlab** and merely **mirrored on Github**. For any question or issue submission, please go to the [project's Gitlab repository](https://gitlab.com/zar3bski/aadvice)
+
 ## Installation
 
-Simply download the binary for your architecture [here](https://github.com/zar3bski/aadvice/releases) and save it as `aadvice` somewhere in your `PATH` (like `$HOME/.local/bin/aadvice`). Then
+Simply download the binary for your architecture [here](https://gitlab.com/zar3bski/aadvice/-/releases) somewhere in your `PATH` (like `$HOME/.local/bin/aadvice`). Then
 
 ```shell
 # make it executable
 chmod +x $HOME/.local/bin/aadvice
 
-# make sur it is found in your PATH 
+# make sure it is found in your PATH 
 aadvice --help
 ```
 
