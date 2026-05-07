@@ -1,0 +1,112 @@
+variables:
+  CI_IMAGE: rust:1.95.0-slim-bookworm
+  APPLICATION: aadvice
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${APPLICATION}"
+
+workflow:
+  auto_cancel:
+    on_job_failure: all
+
+stages: 
+  - test
+  - build
+  - publish
+  - release
+
+unit_tests:
+  extends: .tests
+  script:
+    - cargo test --verbose
+
+formatting_check:
+  extends: .tests
+  script:
+    - cargo fmt --all -- --check
+
+linting:
+  extends: .tests
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings  
+
+build_x86_64:
+  extends: .build
+  tags:
+    - saas-linux-small-amd64
+  script:
+    - cargo build --release
+    - mv target/release/$APPLICATION  target/release/$APPLICATION-x86_64
+  artifacts:
+    paths: 
+      - target/release
+
+build_aarch64:
+  extends: .build
+  tags:
+    - saas-linux-small-arm64
+  script:
+    - cargo build --release
+    - mv target/release/$APPLICATION  target/release/$APPLICATION-aarch64
+  artifacts:
+    paths: 
+      - target/release
+
+
+upload:
+  stage: publish
+  image: curlimages/curl:latest
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - |
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --upload-file target/release/$APPLICATION-x86_64 \
+        "${PACKAGE_REGISTRY_URL}-x86_64/${CI_COMMIT_TAG}/${APPLICATION}"
+    - |
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --upload-file target/release/$APPLICATION-aarch64 \
+        "${PACKAGE_REGISTRY_URL}-aarch64/${CI_COMMIT_TAG}/${APPLICATION}"
+
+release_job:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG 
+  needs:
+    - job: upload
+  script:
+    - echo "Creating release $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: 'Release $CI_COMMIT_TAG'
+    description: 'Release created using the CLI.'
+    assets:
+      links:
+        - name: "${APPLICATION}-x86_64"
+          url: "${PACKAGE_REGISTRY_URL}-x86_64/${CI_COMMIT_TAG}/${APPLICATION}"
+          link_type: "other"
+        - name: "${APPLICATION}-aarch64"
+          url: "${PACKAGE_REGISTRY_URL}-aarch64/${CI_COMMIT_TAG}/${APPLICATION}"
+          link_type: "other"
+
+
+#####################BASES################
+.tests:
+  stage: test
+  image: $CI_IMAGE
+  rules: 
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "merge_request_event"
+  before_script:
+    - apt-get update && apt-get install -y libdbus-1-dev
+    - rustup component add rustfmt
+    - rustup component add clippy
+    - export DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address)
+
+.build:
+  stage: build
+  image: $CI_IMAGE
+  rules:
+    - if: $CI_COMMIT_TAG 
+  before_script:
+    - apt-get update && apt-get install -y libdbus-1-dev
+#################END#BASES################
+
