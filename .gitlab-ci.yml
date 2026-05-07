@@ -1,0 +1,34 @@
+variables:
+  CI_IMAGE: rust:1.95.0-slim-bookworm
+
+workflow:
+  auto_cancel:
+    on_job_failure: all
+
+stages: 
+  - test
+  - build
+  - publish
+
+.tests:
+  stage: test
+  image: $CI_IMAGE
+  rules: 
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME != $CI_DEFAULT_BRANCH
+  before_script:
+    - sudo apt-get install libdbus-1-dev
+
+unit_tests:
+  extends: .tests
+  script:
+    - cargo test --verbose
+
+formatting_check:
+  extends: .tests
+  script:
+    - cargo fmt --all -- --check
+
+linting:
+  extends: .tests
+  script:
+    - cargo clippy --all-targets --all-features -- -D warnings  
