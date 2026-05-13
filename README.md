@@ -11,11 +11,11 @@ D-Bus based AppArmor notifier for org.freedesktop.Notifications
 
 ## Installation
 
-Simply download the binary for your architecture [here](https://gitlab.com/zar3bski/aadvice/-/releases) somewhere in your `PATH` (like `$HOME/.local/bin/aadvice`). Then
+Simply download the binary for your architecture [here](https://gitlab.com/zar3bski/aadvice/-/releases) somewhere in the system `PATH` (like `/usr/local/bin/aadvice`). Then
 
 ```shell
 # make it executable
-chmod +x $HOME/.local/bin/aadvice
+chmod +x /usr/local/bin/aadvice
 
 # make sure it is found in your PATH 
 aadvice --help
